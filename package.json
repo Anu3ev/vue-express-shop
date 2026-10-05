@@ -1,14 +1,29 @@
 {
-  "name": "js_course2",
-  "version": "0.0.1",
-  "description": "JS COURSE",
+  "name": "vue-express-shop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Educational Vue storefront with an Express catalog API and a browser-local demo cart",
   "main": "server.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "type": "commonjs",
+  "engines": {
+    "node": "24.x"
   },
-  "author": "alexander.anufriev@insales.ru",
+  "scripts": {
+    "build": "node tools/build.cjs",
+    "prestart": "npm run build",
+    "start": "node server.js",
+    "dev": "npm run build && node --watch server.js",
+    "test": "node --test test/*.test.cjs",
+    "test:e2e": "playwright test",
+    "check": "node --check server.js && node --check public/scripts.js && node --check public/cart.js && npm test && npm run build"
+  },
+  "author": "Alexander Anufriev",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.17.1"
+    "express": "5.2.1",
+    "vue": "3.5.43"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
   }
 }

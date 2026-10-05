@@ -50,6 +50,7 @@ test('catalog renders all eight products and safely marks the missing price unav
   await expect(product(page, 1)).toContainText('$60.00');
   await expect(product(page, 3)).toContainText('Price unavailable');
   await expect(product(page, 3).getByRole('button')).toBeDisabled();
+  await expect(product(page, 5).getByRole('heading')).toHaveText('Unknown Product');
   await expect(product(page, 8).getByRole('img')).toHaveAttribute('src', '/images/product-placeholder.svg');
   await expect(page.getByRole('button', { name: /^Open cart,/ })).toHaveText('Cart (0)');
 });
@@ -304,12 +305,16 @@ test('catalog and cart fit the viewport and produce review screenshots', async (
   await page.evaluate(() => window.scrollTo({ top: 0, behavior: 'instant' }));
   await expect.poll(() => page.evaluate(() => [...document.images].every(image => image.complete && image.naturalWidth > 0))).toBe(true);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('catalog.png'), fullPage: true, animations: 'disabled' });
+  const catalogScreenshot = testInfo.outputPath('catalog.png');
+  await page.screenshot({ path: catalogScreenshot, fullPage: true, animations: 'disabled' });
+  await testInfo.attach('Catalog', { path: catalogScreenshot, contentType: 'image/png' });
   await addProduct(page, 1);
   const bounds = await cart(page).boundingBox();
   const viewport = page.viewportSize();
   expect(bounds.x).toBeGreaterThanOrEqual(0);
   expect(bounds.x + bounds.width).toBeLessThanOrEqual(viewport.width);
   await expect(page.getByRole('button', { name: 'Continue shopping' })).toBeVisible();
-  await page.screenshot({ path: testInfo.outputPath('cart.png'), animations: 'disabled' });
+  const cartScreenshot = testInfo.outputPath('cart.png');
+  await page.screenshot({ path: cartScreenshot, animations: 'disabled' });
+  await testInfo.attach('Cart', { path: cartScreenshot, contentType: 'image/png' });
 });

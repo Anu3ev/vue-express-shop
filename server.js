@@ -1,170 +1,62 @@
-const express = require('express'),
-  bodyParser = require('body-parser'),
-  app = express(),
-  fs = require('fs');
+'use strict';
 
-app.use(bodyParser.json());
-app.use(express.static('.'));
+const path = require('node:path');
+const express = require('express');
+const { normalizeCatalog } = require('./lib/catalog.cjs');
+const sourceCatalog = require('./products/data.json');
 
-// Заводим пустой объект для записи действий пакупателя, переменную для записи даты, и переменную для итоговой цены товаров
-let action = {},
-  now,
-  totalPrice;
+const app = express();
+const catalog = normalizeCatalog(sourceCatalog);
 
-// Функция для перерасчёта общей стоимости товаров в корзине
-function calculateItems(items) {
-  totalPrice = 0;
-  items.forEach((cartItem) => {
-    // Считаем стоимость каждой отдельной позиции с привязкой к количеству
-    cartItem.cartPrice = cartItem.salePrice * cartItem.count;
+app.disable('x-powered-by');
+app.set('json escape', true);
 
-    // Считаем стоимость всех товаров в корзине
-    totalPrice += cartItem.salePrice * cartItem.count;
-  })
+// The API never accepts cart data or client-provided prices. Carts belong to
+// each browser; the server only publishes this bundled, read-only catalog.
+for (const route of ['/api/catalog', '/catalogData']) {
+  app.get(route, (request, response) => {
+    response.json(catalog);
+  });
+
+  app.all(route, (request, response) => {
+    response.set('Allow', 'GET, HEAD').status(405).json({
+      error: 'Method not allowed',
+    });
+  });
 }
 
-// Получение списка товаров каталога
-app.get('/catalogData', (req, res) => {
-  fs.readFile('./products/data.json', 'utf8', (err, data) => {
-    res.send(data);
+// Vercel serves public/ directly. Local Express must never expose the repo
+// root, catalog source, dependencies, or obsolete shared-cart files.
+if (!process.env.VERCEL) {
+  app.use(express.static(path.join(__dirname, 'public'), {
+    dotfiles: 'ignore',
+    index: 'index.html',
+  }));
+}
+
+app.use((request, response) => {
+  response.status(404).json({ error: 'Not found' });
+});
+
+app.use((error, request, response, next) => {
+  if (response.headersSent) return next(error);
+
+  const status = Number.isInteger(error.status) && error.status >= 400 && error.status < 600
+    ? error.status
+    : 500;
+
+  response.status(status).json({
+    error: status >= 500 ? 'Internal server error' : 'Bad request',
   });
 });
 
-// Получение списка товаров корзины
-app.get('/cartItems', (req, res) => {
-  fs.readFile('cart.json', 'utf8', (err, data) => {
-    if (!err) {
-      const cart = JSON.parse(data);
+// Exporting the app lets Vercel own the listener and lets tests bind a random
+// available port. Running `node server.js` still starts the local demo.
+module.exports = app;
 
-      calculateItems(cart);
-
-      fs.writeFile('cart.json', JSON.stringify(cart), (err) => {
-        if (!err) {
-          res.send(cart);
-        } else {
-          res.send('{"result": 0}');
-        }
-      });
-    }
+if (require.main === module) {
+  const port = Number(process.env.PORT || 5500);
+  app.listen(port, () => {
+    console.log(`Shop available at http://localhost:${port}`);
   });
-});
-
-// Добавление товара в корзину
-app.post('/addToCart', (req, res) => {
-  fs.readFile('cart.json', 'utf8', (err, data) => {
-    if (!err) {
-      const cart = JSON.parse(data);
-
-      const cartItem = req.body;
-
-      if (!cart.some((item) => cartItem.id === item.id)) {
-        cart.push(cartItem);
-        action = {
-          'name': 'Товар добавлен в корзину',
-          'productName': cartItem.title,
-          'time': now
-        }
-        now = new Date();
-        calculateItems(cart);
-      } else {
-        cart.forEach((item, i) => {
-          if (cartItem.id === item.id) {
-            if (cartItem.mathOperation === 'plus') {
-              ++item.count;
-              action = {
-                'name': 'Увеличено количество товара в корзине',
-                'productName': cartItem.title,
-                'time': now
-              }
-              now = new Date();
-            } else {
-              --item.count;
-              action = {
-                'name': 'Уменьшено количество товара в корзине',
-                'productName': cartItem.title,
-                'time': now
-              }
-              now = new Date();
-            }
-          }
-          calculateItems(cart);
-        });
-      }
-
-      // Записываем действия покупателя в файл stats.json
-      fs.readFile('stats.json', 'utf8', (err, data) => {
-        if (!err) {
-          const stats = JSON.parse(data);
-          stats.push(action);
-          fs.writeFile('stats.json', JSON.stringify(stats), (err) => {});
-        }
-      });
-
-      fs.writeFile('cart.json', JSON.stringify(cart), (err) => {
-        if (!err) {
-          res.send(cart);
-        } else {
-          res.send('{"result": 0}');
-        }
-      });
-    } else {
-      res.send('{"result": 0}');
-    }
-  });
-});
-
-// Удаление товара из корзины
-app.post('/removeItem', (req, res) => {
-  fs.readFile('cart.json', 'utf8', (err, data) => {
-    const cart = JSON.parse(data);
-
-    const cartItem = req.body;
-
-    cart.forEach((item, i) => {
-      if (cartItem.id === item.id) {
-        cart.splice(i, 1);
-        action = {
-          'name': 'Товар удалён из корзины',
-          'productName': cartItem.title,
-          'time': now
-        }
-        now = new Date();
-      }
-    });
-
-    calculateItems(cart);
-
-    // Записываем действия покупателя в файл stats.json
-    fs.readFile('stats.json', 'utf8', (err, data) => {
-      const stats = JSON.parse(data);
-      stats.push(action);
-      fs.writeFile('stats.json', JSON.stringify(stats), (err) => {})
-    });
-
-    fs.writeFile('cart.json', JSON.stringify(cart), (err) => {
-      if (!err) {
-        res.send(cart);
-      } else {
-        res.send('{"result": 0}');
-      }
-    });
-  });
-});
-
-app.get('/totalPrice', (req, res) => {
-  fs.readFile('totalPrice.json', 'utf8', (err, data) => {
-    const total = JSON.parse(data);
-    total[0] = totalPrice;
-    fs.writeFile('totalPrice.json', JSON.stringify(total), (err) => {
-      if (!err) {
-        res.send(total);
-      } else {
-        res.send('{"result": 0}');
-      }
-    });
-  });
-});
-
-app.listen(5500, () => {
-  console.log('Express server started on port 5500');
-});
+}

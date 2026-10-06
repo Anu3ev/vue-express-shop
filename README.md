@@ -1,123 +1,151 @@
 # Vue Express Shop
 
-**A small educational storefront built with Vue 2 and Express.**
+**An educational storefront built with Vue and an Express catalog API.**
 
-The demo is branded **Super Expensive Shop** and combines a clothing catalog, product search, a shopping cart, and a feedback-form validation exercise. It was developed as JavaScript coursework in 2021 and shows how browser components communicate with a simple Node.js API.
+The demo is branded **Super Expensive Shop**. It started as JavaScript coursework in 2021. The original layout and sample catalog are retained, while the runtime, cart behavior, error states and deployment setup have been refreshed.
 
 ## Features
 
-- Browse eight sample products with images and prices.
-- Search product titles using a case-insensitive regular expression.
-- Add products to a slide-out cart, increase or decrease quantities, and view line totals and a subtotal.
-- Remove a product by decreasing its quantity from one.
-- Store the shared cart in local JSON files and record cart actions in an activity log.
-- Validate name, email, and phone fields in the browser. The feedback form does not submit messages.
-- Explore fallback values for missing product titles, images, and prices in the sample data.
+- Browse eight sample products with local images and clear fallbacks.
+- Search product titles with case-insensitive, literal text, including punctuation.
+- Add products to a cart, increase or decrease quantities, remove items, and see exact cent-based totals.
+- Keep a separate cart in each visitor's browser across reloads; synchronize changes between tabs.
+- Recover from an invalid saved cart or unavailable browser storage without breaking the page.
+- Retry failed catalog requests and distinguish loading, empty and search-no-results states.
+- Try a labeled, accessible feedback-validation exercise. It never sends or stores messages.
+- Use keyboard-accessible cart and search dialogs on desktop or mobile.
 
-## Tech stack
+A product without a price is marked unavailable. Missing prices are never silently replaced with an invented amount. Quantities are capped at 99 per product.
 
-- **Frontend:** Vue 2 loaded from a CDN, JavaScript, HTML, CSS, and SCSS sources
-- **Backend:** Node.js, Express 4, and `body-parser`
-- **Storage:** JSON files accessed through Node's `fs` module
-- **UI assets:** local product images and logo; Font Awesome 4.7 loaded from a CDN
+## Stack
 
-There is no frontend bundler or build step. The browser loads `scripts.js` and the checked-in `styles/main.css` directly.
+- **Frontend:** Vue 3, JavaScript, HTML and CSS
+- **Backend:** Node.js 24 and Express 5
+- **Catalog:** bundled, read-only JSON data
+- **Cart:** browser `localStorage`, storing only product IDs and quantities
+- **Tests:** Node's test runner and Playwright
+
+The frontend has no bundler. A small build script copies the pinned Vue production runtime and its license into `public/vendor/`. All assets required by the shop are served locally, with no CDN dependency. The original compiled stylesheet is retained; current UI overrides live in `public/styles/app.css`.
 
 ## Run locally
 
-### Requirements
-
-- Git, Node.js, and npm
-- A browser with internet access for Vue and Font Awesome
-- A writable checkout: cart requests modify JSON files in the repository root
-
-The repository does not pin a Node.js or npm version. Its lockfile contains the original Express 4.17.1 dependency tree.
+Requirements: Git, Node.js 24 and npm. `.nvmrc` selects Node 24 when using nvm.
 
 ```bash
-git clone https://github.com/Anu3ev/js_level2.git
-cd js_level2
+git clone https://github.com/Anu3ev/vue-express-shop.git
+cd vue-express-shop
 npm ci
-node server.js
+npm start
 ```
 
-Open **http://localhost:5500**.
+Open **http://localhost:5500**. `npm start` prepares browser assets automatically. Use `PORT=3000 npm start` to choose another port on macOS/Linux, or set `$env:PORT=3000` before `npm start` in PowerShell.
 
-Run the server from the repository root because its file paths are relative to the working directory. The port is hard-coded to `5500` in `server.js`. Stop the server with `Ctrl+C`.
+```bash
+npm run dev       # Build assets and restart the server when source files change
+npm run build     # Copy the pinned Vue browser runtime into public/vendor
+npm run check     # JavaScript syntax, unit/API tests, and asset build
+npm run test:e2e  # Desktop and mobile browser tests
+```
 
-Opening `index.html` directly or using a static-only server will not provide the catalog and cart API. The existing compiled CSS is sufficient to run the demo; a Sass compiler and stylesheet build command are not configured in `package.json`.
+Before the first browser test run:
+
+```bash
+npx playwright install chromium
+```
+
+On a minimal Linux machine, `npx playwright install --with-deps chromium` also installs browser system dependencies and may need administrator access. CI uses this command.
+
+`npm run dev` watches the Node server; refresh the browser after frontend edits. Opening `index.html` directly or using a static-only server will not provide the catalog API.
 
 ### Try the demo
 
-1. Add a product to the cart and use its `+` and `-` buttons.
-2. Refresh the page to load the saved cart from the server.
-3. Search for `Jogger`; submit an empty search to show all products again.
-4. Enter invalid feedback-form values to see the validation messages. The phone field expects a format such as `+7(000)000-0000`.
+1. Add a product, increase its quantity and decrease it back to one.
+2. Close the cart and refresh. Your cart should still be present in the same browser.
+3. Decrease a quantity from one to remove that item, or use **Remove**.
+4. Search for `Jogger`, then try `[` and clear the search. Punctuation is ordinary text.
+5. Press Escape to close a dialog and reopen it from the header.
+6. Submit empty or invalid sample feedback fields, then enter valid sample values. No network request sends the form.
 
-## Project structure
+To reset the cart, remove its items in the UI or delete the `vue-express-shop.cart.v1` local-storage key using your browser's developer tools. Clearing site data also clears it.
+
+## Architecture
 
 ```text
-.
-├── index.html          # Page shell and CDN dependencies
-├── scripts.js          # Vue components, event bus, and HTTP helpers
-├── server.js           # Static server, API routes, and file persistence
-├── products/
-│   └── data.json       # Sample catalog
-├── images/             # Logo, favicon, and product photos
-├── sass/               # SCSS source files
-├── styles/
-│   └── main.css        # Stylesheet loaded by the page
-├── cart.json           # Shared cart, initially []
-├── stats.json          # Cart action log, initially []
-├── totalPrice.json     # Stored subtotal array, initially [0]
-├── package.json
-├── package-lock.json
-└── LICENSE
+Browser                              Express / Vercel Function
+  Vue UI ─── GET /api/catalog ───────► bundled products/data.json
+  Cart IDs + quantities                read-only catalog response
+    └── localStorage
+  Totals derived from catalog prices
 ```
 
-The repository also contains a checked-in `node_modules/` directory.
+Express never accepts prices or writes cart data. Each browser has its own demo cart, avoiding shared-user state, concurrent file writes and dependence on a persistent server filesystem. Serverless instances can restart without losing the visitor's saved cart.
 
-## How it works
-
-The root Vue instance renders the header, main content, and footer. `shopMain` loads catalog and cart data and owns the main application state. Product, search, and cart components communicate through a shared Vue event bus.
-
-HTTP helpers wrap `XMLHttpRequest` in promises. Express serves the frontend and handles catalog and cart requests. Cart changes recalculate item totals and write the updated cart to disk; action records are appended to `stats.json`.
+Prices and line totals are derived from the catalog in integer cents. Saved carts are checked against currently available products, unknown IDs and invalid counts are discarded, and duplicate entries are combined within the quantity limit. This is a display-only demo; a real checkout must validate pricing and stock again on the server.
 
 ### API
 
 | Method | Route | Purpose |
 | --- | --- | --- |
-| `GET` | `/catalogData` | Return the catalog as an object with a `goods` array |
-| `GET` | `/cartItems` | Read the cart, recalculate line totals, write it back, and return it |
-| `POST` | `/addToCart` | Add a product or change an existing product's quantity |
-| `POST` | `/removeItem` | Remove a product by its `id` and return the updated cart |
-| `GET` | `/totalPrice` | Write and return the current in-memory subtotal as a one-element array |
+| `GET` / `HEAD` | `/api/catalog` | Return `{ "goods": [...] }` with normalized product records |
+| `GET` / `HEAD` | `/catalogData` | Compatibility alias for the original catalog URL |
 
-POST requests use JSON bodies. `/addToCart` receives a product object; for existing items, `mathOperation: "plus"` increases the quantity and the other branch decreases it. `/removeItem` uses the product's `id` and `title` for removal and logging. The frontend supplies these requests.
+Other methods on catalog endpoints return JSON `405`. Unknown routes and the old shared-cart endpoints return JSON `404`. The previous `/cartItems`, `/addToCart`, `/removeItem` and `/totalPrice` API is intentionally removed.
 
-The subtotal is calculated when cart data is read or changed. Calling `/totalPrice` before a cart operation can return `[null]` because the in-memory value has not been initialized.
+### Structure
+
+```text
+public/
+  index.html              # Page shell and root Vue bindings
+  scripts.js              # Vue components, dialogs, loading and feedback states
+  cart.js                 # Pure cart/search/persistence helpers
+  images/                 # Original logo/product photos and local fallback
+  styles/main.css         # Original compiled coursework stylesheet
+  styles/app.css          # Maintained responsive/accessibility overrides
+  vendor/                 # Generated Vue runtime; not committed
+lib/catalog.cjs           # Safe catalog normalization
+server.js                 # Read-only API; local public/ static server
+products/data.json        # Original sample catalog
+docs/product-sources.txt  # Retained links to the sample product sources
+sass/                     # Historical SCSS sources for main.css
+tools/build.cjs           # Reproducible local vendor-asset build
+test/                     # Unit/API and browser tests
+vercel.json               # Express deployment and response headers
+```
+
+Only `public/` is web-accessible. Source files, catalog source, package manifests, dependencies and Git metadata are not static web content. `node_modules/` and generated files are ignored rather than committed. Historical commits and coursework branches remain unchanged.
+
+## Deploy on Vercel
+
+The project follows [Vercel's Express support](https://vercel.com/docs/frameworks/backend/express): the root `server.js` exports the application, and `public/` assets are served by Vercel's CDN. No database, secret or environment variable is required for the demo.
+
+1. Import this GitHub repository into your Vercel account.
+2. Use the **Express** framework preset, repository root, Node.js **24.x**, and build command **`npm run build`**. Leave Output Directory at its framework default.
+3. Deploy a preview from the proposed change branch before promoting or merging it.
+4. Check `/`, `/api/catalog`, a product image, and the add/search/reload flows on the deployed URL. `/server.js`, `/package.json` and `/products/data.json` must return `404`.
+
+Authentication, the project/team choice and any GitHub integration permissions must be approved by the account owner. No deployment URL is claimed here until a real deployment is verified. Use a suitable free account/plan if eligible; this project does not require purchasing infrastructure.
+
+## Test coverage
+
+`npm test` covers catalog normalization, unavailable/malformed prices, integer-cent totals, cart operations, invalid storage, literal search, request timeout/unmount cleanup, read-only API behavior, source-file isolation and serverless/CWD-independent module loading.
+
+Playwright covers the browser flows on desktop and mobile, including repeat clicks, persistence/isolation, failure recovery, unavailable storage, dialogs and feedback validation. CI performs a clean install, the application checks and browser tests. A green test run is evidence for those scenarios, not a claim of production ecommerce readiness.
 
 ## Scope and limitations
 
-This is a learning project. Keep it in a trusted local environment.
-
-- **One shared cart:** there are no user accounts, sessions, checkout, payments, or order processing.
-- **Demo controls:** category, account, and several footer links are placeholders. The feedback form only demonstrates client-side validation.
-- **Basic persistence:** JSON writes have no transaction or concurrency protection. Error handling is incomplete, and activity timestamps can be missing or lag behind an action.
-- **No production safeguards:** the API trusts client-supplied product data, prices, and quantities. Express exposes the project root as static content, including data and source files.
-- **Search edge cases:** the query is passed directly to `RegExp`; malformed expressions can cause an error.
-- **External assets:** Vue, icon styles, and the missing-image placeholder depend on third-party services.
-- **Legacy dependencies:** the project uses Vue 2 and a 2021 server dependency lockfile. Review and update dependencies before extending or deploying it.
-
-To reset a local demo, stop the server and back up any data you want to keep. Set `cart.json` and `stats.json` to `[]`, set `totalPrice.json` to `[0]`, then restart the server. This clears the saved cart and action history.
-
-## Tests and tooling
-
-There is no application test suite or lint configuration. `npm test` runs the default placeholder command and exits with an error. No `start`, `dev`, or `build` scripts are defined; start the application with `node server.js`.
+- This is a portfolio/coursework demo. There are no accounts, checkout, payments, inventory reservations or order processing.
+- Cart storage is local to this site in one browser. It does not sync between devices, and private browsing or clearing site data can remove it. If storage is blocked, the cart remains in memory for the current page.
+- Concurrent changes from different tabs use the browser's last-write-wins behavior; this is not a transactional order system.
+- Feedback is a client-side validation exercise with the original Russian phone format. Use sample details, not real personal data.
+- Product descriptions and photos are retained sample coursework assets, not a live store inventory. Review any third-party asset rights before reuse outside this demo.
+- `sass/` is historical source for the original checked-in stylesheet. Current maintained overrides are plain CSS; there is no Sass compilation task.
 
 ## Project history
 
-The original repository name is `js_level2`. The `lesson3`, `lesson4`, `lesson5-6`, and `lesson7` branches preserve stages of the coursework. The `master` branch contains the Vue frontend and Express backend described here.
+The original repository name was `js_level2`. The `lesson3`, `lesson4`, `lesson5-6` and `lesson7` branches preserve stages of the coursework. The original implementation used Vue 2, Express 4, a shared JSON-file cart and external CDN assets; those runtime limitations are replaced in this refresh.
 
 ## License
 
-The license declarations currently conflict: [`LICENSE`](LICENSE) contains the GNU General Public License v3.0 text, while [`package.json`](package.json) declares `ISC`. The intended license needs clarification by the maintainer.
+Original project code is licensed under the [MIT License](LICENSE).
+
+Third-party code and assets retain their respective licenses and notices. Product photos and other sample coursework assets are not covered by this MIT grant unless separately stated; their reuse rights have not been verified. Source links are retained in [docs/product-sources.txt](docs/product-sources.txt). Vue's MIT license is included alongside its generated runtime.

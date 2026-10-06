@@ -1,8 +1,12 @@
-/* Shared, side-effect-free cart rules for the browser and Node's test runner. */
+/* Cart rules and storage adapters shared by the browser and Node's test runner. */
 (function (root, factory) {
   const api = factory();
-  if (typeof module === 'object' && module.exports) module.exports = api;
-  else root.ShopCart = api;
+  if (typeof module === 'object' && module.exports) {
+    module.exports = api;
+    return;
+  }
+
+  root.ShopCart = api;
 })(typeof globalThis === 'object' ? globalThis : this, function () {
   'use strict';
   const STORAGE_KEY = 'vue-express-shop.cart.v1';
@@ -10,7 +14,12 @@
 
   function normalizeCart(value, goods) {
     if (!Array.isArray(value)) return [];
-    const available = new Set(goods.filter(good => good.available && Number.isSafeInteger(good.priceCents) && good.priceCents >= 0).map(good => good.id));
+    const availableGoods = goods.filter(good => {
+      if (!good.available) return false;
+
+      return Number.isSafeInteger(good.priceCents) && good.priceCents >= 0;
+    });
+    const available = new Set(availableGoods.map(good => good.id));
     const counts = new Map();
     for (const item of value.slice(0, 1000)) {
       if (!item || !Number.isSafeInteger(item.id) || !available.has(item.id)) continue;
@@ -26,8 +35,11 @@
     const good = goods.find(item => item.id === id && item.available);
     if (!good) return next;
     const item = next.find(item => item.id === id);
-    if (!item && delta === 1) next.push({ id, count: 1 });
-    else if (item) item.count = Math.min(MAX_QUANTITY, item.count + delta);
+    if (!item && delta === 1) {
+      next.push({ id, count: 1 });
+    } else if (item) {
+      item.count = Math.min(MAX_QUANTITY, item.count + delta);
+    }
     return normalizeCart(next, goods);
   }
 
@@ -51,7 +63,8 @@
   function readCart(storage, goods) {
     try {
       const raw = storage.getItem(STORAGE_KEY);
-      return { cart: normalizeCart(raw ? JSON.parse(raw) : [], goods), warning: '' };
+      const savedCart = raw ? JSON.parse(raw) : [];
+      return { cart: normalizeCart(savedCart, goods), warning: '' };
     } catch {
       return { cart: [], warning: 'Your saved cart could not be loaded. You can start a new cart.' };
     }
@@ -59,7 +72,8 @@
 
   function writeCart(storage, cart) {
     try {
-      storage.setItem(STORAGE_KEY, JSON.stringify(cart.map(({ id, count }) => ({ id, count }))));
+      const savedItems = cart.map(({ id, count }) => ({ id, count }));
+      storage.setItem(STORAGE_KEY, JSON.stringify(savedItems));
       return '';
     } catch {
       return 'Your browser could not save the cart. It will last only until this page is closed.';

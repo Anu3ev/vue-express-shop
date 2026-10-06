@@ -127,7 +127,7 @@ Authentication, the project/team choice and any GitHub integration permissions m
 
 ## Test coverage
 
-`npm test` covers catalog normalization, unavailable/malformed prices, integer-cent totals, cart operations, invalid storage, literal search, read-only API behavior, source-file isolation and serverless/CWD-independent module loading.
+`npm test` covers catalog normalization, unavailable/malformed prices, integer-cent totals, cart operations, invalid storage, literal search, request timeout/unmount cleanup, read-only API behavior, source-file isolation and serverless/CWD-independent module loading.
 
 Playwright covers the browser flows on desktop and mobile, including repeat clicks, persistence/isolation, failure recovery, unavailable storage, dialogs and feedback validation. CI performs a clean install, the application checks and browser tests. A green test run is evidence for those scenarios, not a claim of production ecommerce readiness.
 

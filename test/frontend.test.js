@@ -1,18 +1,17 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const { readFileSync } = require('node:fs');
-const path = require('node:path');
-const vm = require('node:vm');
-const ShopCart = require('../public/cart.js');
+import { afterEach, test, vi } from 'vitest';
+import assert from 'node:assert/strict';
+import { createSSRApp } from 'vue';
+import { renderToString } from 'vue/server-renderer';
+import App from '../src/App.vue';
+import ProductCard from '../src/components/ProductCard.vue';
+import FeedbackForm from '../src/components/FeedbackForm.vue';
 
-const source = readFileSync(path.join(__dirname, '../public/scripts.js'), 'utf8');
 const goods = [{ id: 1, title: 'Tee', img: '/images/tee.jpg', available: true, priceCents: 1595 }];
 const successfulResponse = { ok: true, json: async () => ({ goods }) };
 
-// Capture the real Options API hooks without mounting a DOM. Browser UI
-// behavior remains covered by Playwright; this fixture controls request timing.
+// Use the imported SFC's real Options API hooks without mounting a DOM.
+// Playwright covers browser behavior; this fixture controls request timing.
 function createCatalogHarness({ fetch }) {
-  let definition;
   let timerId = 0;
   const timers = new Map();
   const removedEvents = [];
@@ -20,40 +19,28 @@ function createCatalogHarness({ fetch }) {
     localStorage: { getItem: () => null },
     removeEventListener: name => removedEvents.push(name),
   };
-  const context = {
-    Vue: {
-      createApp(options) {
-        definition = options;
-        return { mount() {} };
-      },
-    },
-    ShopCart,
-    AbortController,
-    Intl,
-    window,
-    fetch,
-    setTimeout(callback) {
-      timers.set(++timerId, callback);
-      return timerId;
-    },
-    clearTimeout(id) {
-      timers.delete(id);
-    },
-  };
-  vm.runInNewContext(source, context);
+  vi.stubGlobal('window', window);
+  vi.stubGlobal('fetch', fetch);
+  vi.stubGlobal('setTimeout', callback => {
+    timers.set(++timerId, callback);
+    return timerId;
+  });
+  vi.stubGlobal('clearTimeout', id => timers.delete(id));
 
-  const app = definition.data();
-  for (const [name, method] of Object.entries(definition.methods)) {
+  const app = App.data();
+  for (const [name, method] of Object.entries(App.methods)) {
     app[name] = method.bind(app);
   }
-  definition.created.call(app);
+  App.created.call(app);
   return {
     app,
     timers,
     removedEvents,
-    unmount: () => definition.beforeUnmount.call(app),
+    unmount: () => App.beforeUnmount.call(app),
   };
 }
+
+afterEach(() => vi.unstubAllGlobals());
 
 test('catalog ignores a repeated load while the current request is pending', async () => {
   const response = Promise.withResolvers();
@@ -151,14 +138,17 @@ test('a failed catalog request can be retried successfully', async () => {
   assert.equal(timers.size, 0);
 });
 
-test('shipped Vue templates compile to executable render functions', () => {
-  const { compile } = require('vue');
-  const html = readFileSync(path.join(__dirname, '../public/index.html'), 'utf8');
-  const pageTemplate = html.match(/<body>([\s\S]*)<\/body>/)[1];
-  const componentTemplates = [...source.matchAll(/template: `([\s\S]*?)`,/g)];
-
-  assert.equal(typeof compile(pageTemplate), 'function');
-  for (const match of componentTemplates) {
-    assert.equal(typeof compile(match[1]), 'function');
+test('shipped Vue templates compile to executable render functions', async () => {
+  assert.equal(App.components.ProductCard, ProductCard);
+  assert.equal(App.components.FeedbackForm, FeedbackForm);
+  // Vitest's Node environment compiles SFC templates for server rendering.
+  for (const component of [App, ProductCard, FeedbackForm]) {
+    assert.equal(typeof component.ssrRender, 'function');
   }
+
+  assert.match(await renderToString(createSSRApp(App)), /Loading products…/);
+  const productHtml = await renderToString(createSSRApp(ProductCard, { good: goods[0] }));
+  assert.match(productHtml, /Add Tee to cart/);
+  assert.match(productHtml, /\$15\.95/);
+  assert.match(await renderToString(createSSRApp(FeedbackForm)), /Validate sample/);
 });

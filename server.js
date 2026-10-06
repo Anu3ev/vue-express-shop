@@ -11,15 +11,6 @@ const catalog = normalizeCatalog(sourceCatalog);
 app.disable('x-powered-by');
 app.set('json escape', true);
 
-// Keep these exact files available when Vercel omits generated public assets.
-app.get('/vendor/vue.global.prod.js', (request, response) => {
-  response.sendFile(require.resolve('vue/dist/vue.global.prod.js'));
-});
-
-app.get('/vendor/vue.LICENSE', (request, response) => {
-  response.type('text/plain').sendFile(require.resolve('./node_modules/vue/LICENSE'));
-});
-
 // The API never accepts cart data or client-provided prices. Carts belong to
 // each browser; the server only publishes this bundled, read-only catalog.
 for (const route of ['/api/catalog', '/catalogData']) {
@@ -34,10 +25,9 @@ for (const route of ['/api/catalog', '/catalogData']) {
   });
 }
 
-// Vercel serves public/ directly. Local Express must never expose the repo
-// root, catalog source, dependencies, or obsolete shared-cart files.
+// Vercel serves the Vite build directly; the local server serves the same dist/.
 if (!process.env.VERCEL) {
-  app.use(express.static(path.join(__dirname, 'public'), {
+  app.use(express.static(path.join(__dirname, 'dist'), {
     dotfiles: 'ignore',
     index: 'index.html',
   }));

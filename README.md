@@ -1,5 +1,7 @@
 # Vue Express Shop
 
+<img width="1904" height="893" alt="image" src="https://github.com/user-attachments/assets/5ad2d6f0-2377-4e12-938a-746494d32c5e" />
+
 A small storefront built with Vue 3, Vite and Express. Browse the catalog, search products and manage a cart that stays in your browser after a reload.
 
 ## Features

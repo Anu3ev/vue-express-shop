@@ -11,6 +11,15 @@ const catalog = normalizeCatalog(sourceCatalog);
 app.disable('x-powered-by');
 app.set('json escape', true);
 
+// Keep these exact files available when Vercel omits generated public assets.
+app.get('/vendor/vue.global.prod.js', (request, response) => {
+  response.sendFile(require.resolve('vue/dist/vue.global.prod.js'));
+});
+
+app.get('/vendor/vue.LICENSE', (request, response) => {
+  response.type('text/plain').sendFile(require.resolve('./node_modules/vue/LICENSE'));
+});
+
 // The API never accepts cart data or client-provided prices. Carts belong to
 // each browser; the server only publishes this bundled, read-only catalog.
 for (const route of ['/api/catalog', '/catalogData']) {

@@ -25,7 +25,7 @@ A product without a price is marked unavailable. Missing prices are never silent
 - **Cart:** browser `localStorage`, storing only product IDs and quantities
 - **Tests:** Node's test runner and Playwright
 
-The frontend has no bundler. A small build script copies the pinned Vue production runtime and its license into `public/vendor/`. All assets required by the shop are served locally, with no CDN dependency. The original compiled stylesheet is retained; current UI overrides live in `public/styles/app.css`.
+The frontend has no bundler. A small build script copies the pinned Vue production runtime and its license into `public/vendor/`. Two exact Express routes also serve those installed package files when generated static assets are absent from a deployment. All assets required by the shop are served locally, with no external CDN dependency. The original compiled stylesheet is retained; current UI overrides live in `public/styles/app.css`.
 
 ## Run locally
 
@@ -112,16 +112,16 @@ test/                     # Unit/API and browser tests
 vercel.json               # Express deployment and response headers
 ```
 
-Only `public/` is web-accessible. Source files, catalog source, package manifests, dependencies and Git metadata are not static web content. `node_modules/` and generated files are ignored rather than committed. Historical commits and coursework branches remain unchanged.
+Static browsing is limited to `public/`, with two additional exact endpoints for the Vue runtime and license. Source files, catalog source, package manifests, other dependencies and Git metadata are not static web content. `node_modules/` and generated files are ignored rather than committed. Historical commits and coursework branches remain unchanged.
 
 ## Deploy on Vercel
 
-The project follows [Vercel's Express support](https://vercel.com/docs/frameworks/backend/express): the root `server.js` exports the application, and `public/` assets are served by Vercel's CDN. No database, secret or environment variable is required for the demo.
+The project follows [Vercel's Express support](https://vercel.com/docs/frameworks/backend/express): the root `server.js` exports the application, and `public/` assets are served by Vercel's CDN. An exact rewrite maps `/` to `/index.html`; API and unknown paths are not rewritten. The Vue runtime and its license have exact-file Express fallbacks, so the page does not depend on generated `public/vendor/` files being collected by Vercel. No database, secret or environment variable is required for the demo.
 
 1. Import this GitHub repository into your Vercel account.
 2. Use the **Express** framework preset, repository root, Node.js **24.x**, and build command **`npm run build`**. Leave Output Directory at its framework default.
 3. Deploy a preview from the proposed change branch before promoting or merging it.
-4. Check `/`, `/api/catalog`, a product image, and the add/search/reload flows on the deployed URL. `/server.js`, `/package.json` and `/products/data.json` must return `404`.
+4. Check `/`, `/api/catalog`, `/vendor/vue.global.prod.js`, `/vendor/vue.LICENSE`, a product image, and the rendered catalog and add/search/reload flows on the deployed URL. The Vue runtime must be JavaScript, not a JSON error. `/server.js`, `/package.json` and `/products/data.json` must return `404`.
 
 Authentication, the project/team choice and any GitHub integration permissions must be approved by the account owner. No deployment URL is claimed here until a real deployment is verified. Use a suitable free account/plan if eligible; this project does not require purchasing infrastructure.
 

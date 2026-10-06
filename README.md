@@ -146,4 +146,6 @@ The original repository name was `js_level2`. The `lesson3`, `lesson4`, `lesson5
 
 ## License
 
-The inherited declarations still conflict: [`LICENSE`](LICENSE) contains GPLv3, while [`package.json`](package.json) declares ISC. The maintainer must clarify the intended license and source obligations. This refresh preserves both declarations rather than making an unapproved licensing decision. Vue's MIT license is included alongside its generated runtime.
+Original project code is licensed under the [MIT License](LICENSE).
+
+Third-party code and assets retain their respective licenses and notices. Product photos and other sample coursework assets are not covered by this MIT grant unless separately stated; their reuse rights have not been verified. Source links are retained in [docs/product-sources.txt](docs/product-sources.txt). Vue's MIT license is included alongside its generated runtime.

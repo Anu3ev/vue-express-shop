@@ -64,11 +64,30 @@ test('compatibility catalog endpoint returns the same JSON', async () => {
   assert.equal(await head.text(), '');
 });
 
-test('local server serves the page and image fallback only from public', async () => {
+test('local server serves the built page, bundled assets and image fallback only from dist', async () => {
   const index = await fetch(`${baseUrl}/`);
   assert.equal(index.status, 200);
   assert.match(index.headers.get('content-type'), /^text\/html/);
-  assert.equal(await index.text(), fs.readFileSync(path.join(root, 'public/index.html'), 'utf8'));
+  const html = await index.text();
+  assert.equal(html, fs.readFileSync(path.join(root, 'dist/index.html'), 'utf8'));
+
+  const scripts = [...html.matchAll(/<script\b([^>]*?)\bsrc="([^"]+)"[^>]*><\/script>/g)];
+  const styles = [...html.matchAll(/<link\b[^>]*?rel="stylesheet"[^>]*?href="([^"]+)"[^>]*>/g)];
+  assert.ok(scripts.length > 0, 'built HTML references a bundled JavaScript entry');
+  assert.ok(styles.length > 0, 'built HTML references bundled CSS');
+  for (const [, attributes, source] of scripts) {
+    assert.match(attributes, /type="module"/);
+    assert.match(source, /^\/assets\/[^/]+\.js$/);
+  }
+  for (const [, source] of styles) assert.match(source, /^\/assets\/[^/]+\.css$/);
+  assert.doesNotMatch(html, /(?:\/vendor\/|\/scripts\.js|\/cart\.js|\/src\/)/);
+
+  for (const source of [...scripts.map(match => match[2]), ...styles.map(match => match[1])]) {
+    const asset = await fetch(`${baseUrl}${source}`);
+    assert.equal(asset.status, 200, source);
+    assert.match(asset.headers.get('content-type'), source.endsWith('.css') ? /^text\/css/ : /javascript/, source);
+    assert.equal(await asset.text(), fs.readFileSync(path.join(root, 'dist', source), 'utf8'), source);
+  }
 
   const placeholder = await fetch(`${baseUrl}/images/product-placeholder.svg`);
   assert.equal(placeholder.status, 200);
@@ -122,6 +141,8 @@ test('source, data, dependency and dotfile paths are not publicly served', async
     '/.git/config', '/.env', '/node_modules/express/package.json',
     '/lib/catalog.cjs', '/test/server.test.cjs', '/public/../server.js',
     '/images/../../package.json', '/%2e%2e/server.js',
+    '/src/main.js', '/src/App.vue', '/src/lib/cart.js', '/vite.config.mjs', '/api/catalog.js',
+    '/scripts.js', '/cart.js', '/vendor/vue.global.prod.js', '/vendor/vue.LICENSE',
   ];
   for (const pathname of paths) {
     const response = await fetch(`${baseUrl}${pathname}`);
@@ -201,14 +222,15 @@ test('exported app loads its catalog independently of the current working direct
 test('Vercel app exports the read-only API and leaves public assets to the platform', async () => {
   const script = `
     const assert = require('node:assert/strict');
-    const app = require(${JSON.stringify(path.join(root, 'server.js'))});
+    const app = require(${JSON.stringify(path.join(root, 'api/catalog.js'))});
+    assert.equal(app, require(${JSON.stringify(path.join(root, 'server.js'))}));
     const server = app.listen(0, '127.0.0.1', async () => {
       const base = 'http://127.0.0.1:' + server.address().port;
       try {
         const response = await fetch(base + '/api/catalog');
         assert.equal(response.status, 200);
         assert.equal((await response.json()).goods.length, 8);
-        for (const pathname of ['/index.html', '/images/logo.png', '/server.js', '/products/data.json']) {
+        for (const pathname of ['/index.html', '/images/logo.png', '/server.js', '/products/data.json', '/vendor/vue.global.prod.js', '/vendor/vue.LICENSE']) {
           const hidden = await fetch(base + pathname);
           assert.equal(hidden.status, 404);
           assert.deepEqual(await hidden.json(), { error: 'Not found' });

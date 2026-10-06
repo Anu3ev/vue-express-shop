@@ -25,10 +25,9 @@ for (const route of ['/api/catalog', '/catalogData']) {
   });
 }
 
-// Vercel serves public/ directly. Local Express must never expose the repo
-// root, catalog source, dependencies, or obsolete shared-cart files.
+// Vercel serves the Vite build directly; the local server serves the same dist/.
 if (!process.env.VERCEL) {
-  app.use(express.static(path.join(__dirname, 'public'), {
+  app.use(express.static(path.join(__dirname, 'dist'), {
     dotfiles: 'ignore',
     index: 'index.html',
   }));

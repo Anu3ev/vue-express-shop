@@ -1,6 +1,6 @@
-const { test } = require('node:test');
-const assert = require('node:assert/strict');
-const Cart = require('../public/cart.js');
+import { test } from 'vitest';
+import assert from 'node:assert/strict';
+import * as Cart from '../src/lib/cart.js';
 const goods = [
   { id: 1, title: 'Tee', priceCents: 1595, available: true },
   { id: 2, title: 'Jogger', priceCents: 1495, available: true },
